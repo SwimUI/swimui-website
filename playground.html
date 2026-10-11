@@ -1,0 +1,165 @@
+<meta charset="utf-8">
+<title>Swim Playground</title>
+<style>
+  /* One working surface: a thin bar with the name and live numbers, then the canvas swim draws into. */
+  :root {
+    --bg: #eef0f4;
+    --bar: #ffffff;
+    --line: #d9dde5;
+    --fg: #1d2129;
+    --muted: #5f6775;
+    --accent: #2f6bdb;
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, sans-serif;
+    --font-data: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0b0c0f; --bar: #15171c; --line: #262a33; --fg: #e8eaef; --muted: #8f97a6; --accent: #6b9bff;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0b0c0f; --bar: #15171c; --line: #262a33; --fg: #e8eaef; --muted: #8f97a6; --accent: #6b9bff;
+    color-scheme: dark;
+  }
+  html, body { height: 100%; }
+  /* the page is the window: no margin, no page scroll (a scrollbar coming and going would resize the canvas again) */
+  body {
+    margin: 0;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-ui);
+    display: flex;
+    flex-direction: column;
+  }
+  /* one line, whatever the width: the live numbers change every frame, and a header that rewrapped would resize the
+     canvas below it again */
+  header {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: baseline;
+    gap: 6px 18px;
+    padding-block: 10px;
+    padding-inline: 16px;
+    background: var(--bar);
+    border-bottom: 1px solid var(--line);
+  }
+  header h1 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 650;
+    letter-spacing: 0.01em;
+  }
+  header a {
+    color: var(--accent);
+    font-size: 13px;
+  }
+  header p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 13px;
+    flex: 1 1 0;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  header h1, header a { white-space: nowrap; }
+  #stats {
+    margin-left: auto;
+    font-family: var(--font-data);
+    font-size: 12px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    flex: none;
+  }
+  #stage {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+  }
+  /* narrow windows: the bar keeps the name, the switch and the numbers; swim lays itself out for the size */
+  @media (max-width: 720px) {
+    header p { display: none; }
+    #stats { font-size: 11px; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  }
+  #ui {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    outline: none;
+    touch-action: none;
+  }
+  #ui:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+  #error {
+    position: absolute;
+    inset: 16px;
+    margin: 0;
+    color: var(--fg);
+    font-family: var(--font-data);
+    font-size: 13px;
+    white-space: pre-wrap;
+  }
+</style>
+
+<header>
+  <h1>Swim Playground</h1>
+  <p>swim.c compiled to WebAssembly: every pixel below is its draw list, drawn with <span id="renderer">Canvas 2D</span>. Keyboard: Tab, arrows, Enter, Space, Esc.</p>
+  <a id="switch" href="#" hidden>Switch to WebGL2</a>
+  <span id="stats">starting</span>
+</header>
+<div id="stage">
+  <canvas id="ui" tabindex="0" aria-label="swim demo user interface"></canvas>
+  <pre id="error" hidden></pre>
+</div>
+
+<script src="js/swim_web.js"></script>
+<script src="js/canvas2d.js"></script>
+<script src="js/webgl2.js"></script>
+<script>
+(() => {
+  // the demo on the web runtime (bindings/web): swim's draw list with Canvas 2D (the browser's text), or
+  // swim_render's buffers with WebGL2 (IBM Plex Sans, shaped by kb_text_shape); ?gl starts with WebGL2
+  const stats = document.getElementById("stats");
+  const link = document.getElementById("switch");
+  const label = document.getElementById("renderer");
+  const fonts = [{"family": null, "style": 0, "data": {"url": "fonts/IBMPlexSansJP-Regular.ttf"}}, {"family": null, "style": 0, "data": {"url": "fonts/IBMPlexSansThai-Regular.ttf"}}, {"family": null, "style": 0, "data": {"url": "fonts/IBMPlexSansDevanagari-Regular.ttf"}}, {"family": null, "style": 0, "data": {"url": "fonts/IBMPlexSansHebrew-Regular.ttf"}}, {"family": null, "style": 0, "data": {"url": "fonts/IBMPlexSansArabic-Regular.ttf"}}, {"family": "sans", "style": 0, "data": {"url": "fonts/IBMPlexSans-Regular.ttf"}}, {"family": "sans", "style": 1, "data": {"url": "fonts/IBMPlexSans-Bold.ttf"}}, {"family": "sans", "style": 2, "data": {"url": "fonts/IBMPlexSans-Italic.ttf"}}];
+  let app = null;
+
+  function show(kind) {
+    label.textContent = kind === "webgl2" ? "WebGL2 (swim_render: SDF boxes, SDF glyph atlas, IBM Plex Sans)" : "Canvas 2D";
+    link.hidden = !fonts.length;
+    link.textContent = kind === "webgl2" ? "Switch to Canvas 2D" : "Switch to WebGL2";
+  }
+
+  link.addEventListener("click", async (e) => {
+    e.preventDefault();
+    show(await app.setRenderer(app.renderer.kind === "webgl2" ? "canvas2d" : "webgl2"));
+    app.canvas.focus({ preventScroll: true });
+  });
+
+  SwimWeb.start({
+    canvas: document.getElementById("ui"),
+    wasm: {"url": "playground.wasm"},
+    // Canvas 2D keeps the system font here, so the switch shows the browser's text against swim_render's
+    families: [{ name: "sans", css: SwimWeb.SYSTEM_FONT }],
+    fonts,
+    canvasFonts: false,
+    renderer: new URLSearchParams(location.search).has("gl") ? "webgl2" : "canvas2d",
+    onFrame: (s) => {
+      stats.textContent = `${s.ms.toFixed(2)} ms frame \u00b7 ${s.commands} commands${s.renderer === "webgl2" ? ` \u00b7 ${s.drawCalls} draw calls` : ""} \u00b7 ${(s.memory / 1048576).toFixed(1)} MB`;
+    },
+  }).then((rt) => {
+    app = rt;
+    show(rt.renderer.kind);
+  }).catch((err) => {
+    const box = document.getElementById("error");
+    box.hidden = false;
+    box.textContent = "The demo could not start: " + (err && err.message ? err.message : err);
+  });
+})();
+</script>

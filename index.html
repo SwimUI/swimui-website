@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>swim — immediate-mode UI in C</title>
+<meta name="description" content="swim is an immediate-mode UI library in C11, declared like SwiftUI: layout, text, input and animation from one header, with bindings for C# and Unity. This site is a swim app.">
+<meta name="theme-color" content="#0b0d12" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#fafbfc" media="(prefers-color-scheme: light)">
+<style>
+  /* The page is one canvas that swim draws into; this only sets the color behind it until the first frame. */
+  :root { --bg: #fafbfc; --fg: #14171f; --muted: #5c6473; color-scheme: light; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #0b0d12; --fg: #e8eaef; --muted: #8f97a6; color-scheme: dark; }
+  }
+  :root[data-theme="dark"] { --bg: #0b0d12; --fg: #e8eaef; --muted: #8f97a6; color-scheme: dark; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, sans-serif;
+  }
+  #stage { position: fixed; inset: 0; }
+  #ui { position: absolute; inset: 0; width: 100%; height: 100%; display: block; outline: none; touch-action: none; }
+  #ui:focus-visible { outline: none; }
+  #status {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    margin: 0;
+    padding: 16px;
+    color: var(--muted);
+    font-size: 14px;
+    text-align: center;
+  }
+  /* what the canvas says, for readers that can't see it (screen readers, crawlers, no JavaScript) */
+  .text-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+<main class="text-only">
+  <h1>swim: immediate-mode UI in C, declared like SwiftUI</h1>
+  <p>swim is a UI library in C11: layout, text, input and animation from one header, with zero allocations per frame and
+    bindings for C# and Unity. This website is itself a swim app compiled to WebAssembly and drawn into a canvas.</p>
+  <p><a href="playground.html">Open the playground</a></p>
+</main>
+<div id="stage">
+  <canvas id="ui" tabindex="0" aria-label="swim website, drawn by swim"></canvas>
+  <p id="status">Loading…</p>
+</div>
+<noscript><p style="position:fixed;inset:auto 0 0 0;padding:16px;text-align:center">This site is a WebAssembly app and needs JavaScript.</p></noscript>
+
+<script src="js/swim_web.js"></script>
+<script src="js/canvas2d.js"></script>
+<script>
+  SwimWeb.start({
+    canvas: document.getElementById("ui"),
+    wasm: {"url": "index.wasm"},
+    families: [
+      { name: "sans", css: SwimWeb.SYSTEM_FONT },
+      { name: "mono", css: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace' },
+    ],
+    fonts: [],      // none: built --canvas-only, the browser's fonts
+    renderer: "canvas2d",
+  }).then((app) => {
+    document.getElementById("status").remove();
+    app.canvas.focus({ preventScroll: true });
+  }).catch((err) => {
+    document.getElementById("status").textContent = "The site could not start: " + (err && err.message ? err.message : err);
+  });
+</script>
+</body>
+</html>
