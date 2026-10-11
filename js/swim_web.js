@@ -1,5 +1,6 @@
 // swim in the browser, page half: loads the app's wasm (built with swim_web.c), sends it input, runs frames and
-// hands each one to a renderer (canvas2d.js: the draw list with Canvas 2D, webgl2.js: swim_render's buffers).
+// hands each one to a renderer (canvas2d.js: the draw list with Canvas 2D, webgl2.js: the GL functions with which
+// the module draws swim_render's buffers).
 // A plain script (no modules, so a page opened from disk works): SwimWeb.start(options) once the three are loaded.
 //
 //     const app = await SwimWeb.start({
@@ -156,7 +157,9 @@
           history.pushState(null, "", route ? "#" + route : location.pathname + location.search);
         },
       };
-      const { instance } = await WebAssembly.instantiate(bytes, { env });
+      // the GL functions swim_render_gl calls (js/webgl2.js; not there in a Canvas 2D only build, which needs none)
+      const gl = SwimWeb.glImports ? SwimWeb.glImports(this) : {};
+      const { instance } = await WebAssembly.instantiate(bytes, { env, gl });
       this.x = instance.exports;
       this.memory = this.x.memory;
       for (const family of this.families) this.x.sw_web_family(this.toScratch(family.name));
